@@ -1,0 +1,42 @@
+*****multipart/form-data
+data: <JSON>
+*****
+POST http://localhost:9002/login
+Request data={"mail":"nghuyhoang2509@gmail.com", "password":"okokokok1"}
+Validate before request: mail: format mail, 8<=password<=24
+Response:
+    1: {
+            "_id": {
+                "$oid": "641439499f0f417ffa03affd"
+            },
+            "password": "okokokok1",
+            "fullname": "Nguyễn Huy Hoàng",
+            "postId": {
+                "$oid": "641439c79f0f417ffa03afff"
+            },
+            "chatId": {
+                "$oid": "641439d99f0f417ffa03b000"
+            }
+        }
+    2: {"error":"mail or password incorrect"}
+
+POST http://localhost:9002/register
+Request data={"mail":"nghuyhoang2509@gmail.com", "password":"okokokok1","fullname":"Nguyễn Huy Hoàng"}
+Validate before request: mail: format mail, 8<=password<=24, 8<=fullname<=50
+Response:
+    1: {"error": "Mail already exists"}
+    2: {"success":"Register successful"}
+    3: {"error":"There is a problem, please try again"}
+
+POST http://localhost:9002/edit-account
+Request data={"_id":"641439499f0f417ffa03affd","fullname":"Nguyễn Hoàng Huy","password":"okokokok1"}
+Validate before request:  8<=password<=24, 8<=fullname<=50, id no emtpy
+Response 
+    1: {
+        "_id": "641439499f0f417ffa03affd",
+        "fullname": "Nguyễn Hoàng Huy",
+        "password": "okokokok1"
+        }
+    2: {"error":"There is a problem, please try again"}
+
+
