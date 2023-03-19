@@ -20,7 +20,6 @@
 #include "handle.c"
 
 mongoc_client_t *client;
-mongoc_collection_t *collection;
 mongoc_database_t *db;
 bson_error_t errordb;
 
@@ -70,22 +69,39 @@ static enum MHD_Result controller(void *cls, struct MHD_Connection *connection, 
             db = mongoc_client_get_database(client, "user");
             if (strcmp(url, "/login") == 0)
             {
-                collection = mongoc_client_get_collection(client, "user", "account");
-                return Login(connection, con_info->jsonstring, collection);
+                return Login(connection, con_info->jsonstring, client);
             }
             if (strcmp(url, "/register") == 0)
             {
-                collection = mongoc_client_get_collection(client, "user", "account");
-                return Register(connection, con_info->jsonstring, collection);
+                return Register(connection, con_info->jsonstring, client);
             }
             if (strcmp(url, "/edit-account") == 0)
             {
-                collection = mongoc_client_get_collection(client, "user", "account");
-                return Edit_account(connection, con_info->jsonstring, collection);
+                return Edit_account(connection, con_info->jsonstring, client);
+            }
+            if (strcmp(url, "/create-post") == 0)
+            {
+                return Create_post(connection, con_info->jsonstring, client);
+            }
+            if (strcmp(url, "/edit-post") == 0)
+            {
+                return Edit_post(connection, con_info->jsonstring, client);
+            }
+            if (strcmp(url, "/delete-post") == 0)
+            {
+                return Delete_post(connection, con_info->jsonstring, client);
+            }
+            if (strcmp(url, "/all-post") == 0)
+            {
+                return All_post(connection, con_info->jsonstring, client);
+            }
+            if (strcmp(url, "/post") == 0)
+            {
+                return Post(connection, con_info->jsonstring, client);
             }
         }
     }
-    send_data(connection, error);
+    send_data(connection, "{\"error\":\"URL wrong, please try again\"}");
 }
 
 int main()
@@ -116,7 +132,6 @@ int main()
     printf("Máy chủ đang chạy trên cổng %d...\n", PORT);
 
     getchar();
-    mongoc_collection_destroy(collection);
     mongoc_database_destroy(db);
     mongoc_client_destroy(client);
     MHD_stop_daemon(daemon);

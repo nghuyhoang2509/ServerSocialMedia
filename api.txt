@@ -11,12 +11,6 @@ Response:
             },
             "password": "okokokok1",
             "fullname": "Nguyễn Huy Hoàng",
-            "postId": {
-                "$oid": "641439c79f0f417ffa03afff"
-            },
-            "chatId": {
-                "$oid": "641439d99f0f417ffa03b000"
-            }
         }
     2: {"error":"mail or password incorrect"}
 
@@ -30,7 +24,7 @@ Response:
 
 POST http://localhost:9002/edit-account
 Request data={"_id":"641439499f0f417ffa03affd","fullname":"Nguyễn Hoàng Huy","password":"okokokok1"}
-Validate before request:  8<=password<=24, 8<=fullname<=50, id no emtpy
+Validate before request:  8<=password<=24, 8<=fullname<=50, id (userId) no emtpy
 Response 
     1: {
         "_id": "641439499f0f417ffa03affd",
@@ -39,4 +33,51 @@ Response
         }
     2: {"error":"There is a problem, please try again"}
 
+POST http://localhost:9002/create-post
+Request data={"userId":"6416b9476ca3fbacdd01ed61","title":"Connect MongoDB with c","content":"Firstly install libmongoc"}
+Validate before request: 20<=title<=200, 200<=content, userId no empty
+Response 
+    1: {"success":"Create successful"}
+    2: {"error":"There is a problem, please try again"}
 
+POST http://localhost:9002/edit-post
+Request data={"_id":"6416bf16860fead290087081","title":"Connect MongoDB with c","content":"Firstly install libmongoc and bson"}
+Validate before request: 20<=title<=200, 200<=content, id (postId) no empty
+Response 
+    1: {
+        "_id": "6416bf16860fead290087081",
+        "title": "Connect MongoDB with c",
+        "content": "Firstly install libmongoc and bson"
+        }
+    2: {"error":"There is a problem, please try again"}
+
+POST http://localhost:9002/delete-post
+Request data={"_id":"6416bf16860fead290087081"}
+Validate before request: id (postId) no empty
+Response 
+    1: {"success":"Delete successful"}
+    2: {"error":"There is a problem, please try again"}
+
+POST http://localhost:9002/all-post
+Request data={}
+Validate before request: 
+Response 
+    1: {
+        "posts": [
+            "{ \"_id\" : { \"$oid\" : \"6416e068410a035cabab865b\" }, \"title\" : \"Mongodb với nodejs\", \"content\" : \"tạo server backend giữa mongodb và nodejs\" }"
+            ]
+        }
+    2: {"posts":[ ]}
+**** Mỗi phần tử của posts là string chưa được parse ra json
+
+POST http://localhost:9002/post
+Request data={"userId":"6416b9476ca3fbacdd01ed61"}
+Validate before request: userId no empty
+Response 
+    1: {
+        "posts": [
+            "{ \"_id\" : { \"$oid\" : \"6416e068410a035cabab865b\" }, \"title\" : \"Mongodb với nodejs\", \"content\" : \"tạo server backend giữa mongodb và nodejs\" }"
+            ]
+        }
+    2: {"posts":[ ]}
+**** Mỗi phần tử của posts là string chưa được parse ra json

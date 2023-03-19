@@ -1,5 +1,7 @@
-enum MHD_Result Login(struct MHD_Connection *connection, const char *jsonstring, mongoc_collection_t *collection)
+enum MHD_Result Login(struct MHD_Connection *connection, const char *jsonstring, mongoc_client_t *client)
 {
+    mongoc_collection_t *collection;
+    collection = mongoc_client_get_collection(client, "user", "account");
     json_object *parsed_json_from_client = json_tokener_parse(jsonstring);
     json_object *jsmail;
     json_object *jspassword;
@@ -33,6 +35,7 @@ enum MHD_Result Login(struct MHD_Connection *connection, const char *jsonstring,
                 bson_destroy(query);
                 json_object_put(jsmail);
                 json_object_put(jspassword);
+                mongoc_collection_destroy(collection);
                 return MHD_YES;
             }
             else
@@ -44,6 +47,7 @@ enum MHD_Result Login(struct MHD_Connection *connection, const char *jsonstring,
                 bson_destroy(query);
                 json_object_put(jsmail);
                 json_object_put(jspassword);
+                mongoc_collection_destroy(collection);
                 return MHD_YES;
             }
         }
@@ -54,11 +58,14 @@ enum MHD_Result Login(struct MHD_Connection *connection, const char *jsonstring,
     bson_destroy(query);
     json_object_put(jsmail);
     json_object_put(jspassword);
+    mongoc_collection_destroy(collection);
     return MHD_YES;
 }
 
-enum MHD_Result Register(struct MHD_Connection *connection, const char *jsonstring, mongoc_collection_t *collection)
+enum MHD_Result Register(struct MHD_Connection *connection, const char *jsonstring, mongoc_client_t *client)
 {
+    mongoc_collection_t *collection;
+    collection = mongoc_client_get_collection(client, "user", "account");
     json_object *parsed_json_from_client = json_tokener_parse(jsonstring);
     json_object *jspassword;
     json_object *jsmail;
@@ -105,11 +112,14 @@ enum MHD_Result Register(struct MHD_Connection *connection, const char *jsonstri
     json_object_put(jsmail);
     json_object_put(jsfullname);
     json_object_put(jspassword);
+    mongoc_collection_destroy(collection);
     return send_data(connection, "{\"success\":\"Register successful\"}");
 }
 
-enum MHD_Result Edit_account(struct MHD_Connection *connection, const char *jsonstring, mongoc_collection_t *collection)
+enum MHD_Result Edit_account(struct MHD_Connection *connection, const char *jsonstring, mongoc_client_t *client)
 {
+    mongoc_collection_t *collection;
+    collection = mongoc_client_get_collection(client, "user", "account");
     json_object *parsed_json_from_client = json_tokener_parse(jsonstring);
     json_object *jspassword;
     json_object *jsfullname;
@@ -137,6 +147,181 @@ enum MHD_Result Edit_account(struct MHD_Connection *connection, const char *json
     }
     bson_destroy(update);
     bson_destroy(query);
-    return MHD_YES;
+    mongoc_collection_destroy(collection);
     json_object_put(parsed_json_from_client);
+    json_object_put(jspassword);
+    json_object_put(jsfullname);
+    json_object_put(js_id);
+    return MHD_YES;
+}
+
+enum MHD_Result Create_post(struct MHD_Connection *connection, const char *jsonstring, mongoc_client_t *client)
+{
+    mongoc_collection_t *post = mongoc_client_get_collection(client, "user", "post");
+    json_object *parsed_json_from_client = json_tokener_parse(jsonstring);
+    json_object *jsuserId;
+    json_object *jstitle;
+    json_object *jscontent;
+    bson_t *doc = bson_new();
+    json_object_object_get_ex(parsed_json_from_client, "userId", &jsuserId);
+    json_object_object_get_ex(parsed_json_from_client, "title", &jstitle);
+    json_object_object_get_ex(parsed_json_from_client, "content", &jscontent);
+    BSON_APPEND_UTF8(doc, "title", json_object_get_string(jstitle));
+    BSON_APPEND_UTF8(doc, "content", json_object_get_string(jscontent));
+    BSON_APPEND_UTF8(doc, "userId", json_object_get_string(jsuserId));
+    if (!mongoc_collection_insert_one(post, doc, NULL, NULL, NULL))
+    {
+        send_data(connection, "{\"error\":\"There is a problem, please try again\"}");
+    }
+    else
+    {
+        send_data(connection, "{\"success\":\"Create successful\"}");
+    }
+    json_object_put(parsed_json_from_client);
+    json_object_put(jsuserId);
+    json_object_put(jstitle);
+    json_object_put(jscontent);
+    bson_destroy(doc);
+    mongoc_collection_destroy(post);
+    return MHD_YES;
+}
+
+enum MHD_Result Edit_post(struct MHD_Connection *connection, const char *jsonstring, mongoc_client_t *client)
+{
+    mongoc_collection_t *collection;
+    collection = mongoc_client_get_collection(client, "user", "post");
+    json_object *parsed_json_from_client = json_tokener_parse(jsonstring);
+    json_object *jstitle;
+    json_object *jscontent;
+    json_object *js_id;
+    bson_oid_t oid;
+    bson_t *query = NULL;
+    bson_t *update = NULL;
+    bson_error_t error;
+    json_object_object_get_ex(parsed_json_from_client, "title", &jstitle);
+    json_object_object_get_ex(parsed_json_from_client, "content", &jscontent);
+    json_object_object_get_ex(parsed_json_from_client, "_id", &js_id);
+    bson_oid_init_from_string(&oid, json_object_get_string(js_id));
+    query = BCON_NEW("_id", BCON_OID(&oid));
+    update = BCON_NEW("$set", "{",
+                      "title", BCON_UTF8(json_object_get_string(jstitle)),
+                      "content", BCON_UTF8(json_object_get_string(jscontent)),
+                      "}", NULL);
+    if (!mongoc_collection_update_one(collection, query, update, NULL, NULL, &error))
+    {
+        send_data(connection, "{\"error\":\"There is a problem, please try again\"}");
+    }
+    else
+    {
+        send_data(connection, jsonstring);
+    }
+    bson_destroy(update);
+    bson_destroy(query);
+    mongoc_collection_destroy(collection);
+    json_object_put(parsed_json_from_client);
+    json_object_put(jstitle);
+    json_object_put(jscontent);
+    json_object_put(js_id);
+    return MHD_YES;
+}
+
+enum MHD_Result Delete_post(struct MHD_Connection *connection, const char *jsonstring, mongoc_client_t *client)
+{
+    mongoc_collection_t *collection = mongoc_client_get_collection(client, "user", "post");
+    bson_t *query;
+    bson_oid_t oid;
+
+    json_object *parsed_json_from_client = json_tokener_parse(jsonstring);
+    json_object *js_id;
+    json_object_object_get_ex(parsed_json_from_client, "_id", &js_id);
+
+    query = bson_new();
+    bson_oid_init_from_string(&oid, json_object_get_string(js_id));
+    BSON_APPEND_OID(query, "_id", &oid);
+
+    if (!mongoc_collection_delete_one(collection, query, NULL, NULL, NULL))
+    {
+        send_data(connection, "{\"error\":\"There is a problem, please try again\"}");
+    }
+    else
+    {
+        send_data(connection, "{\"success\":\"Delete successful\"}");
+    }
+
+    bson_destroy(query);
+    mongoc_collection_destroy(collection);
+    json_object_put(parsed_json_from_client);
+    json_object_put(js_id);
+    return MHD_YES;
+}
+
+enum MHD_Result All_post(struct MHD_Connection *connection, const char *jsonstring, mongoc_client_t *client)
+{
+    mongoc_collection_t *collection = mongoc_client_get_collection(client, "user", "post");
+    mongoc_cursor_t *cursor;
+    const bson_t *doc;
+    bson_t *query;
+    json_object *jsarray = json_object_new_array();
+    json_object *jstring;
+
+    query = bson_new();
+
+    cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+    while (mongoc_cursor_next(cursor, &doc))
+    {
+        char *json_str = bson_as_json(doc, NULL);
+        json_object_array_add(jsarray, jstring = json_object_new_string(json_str));
+        bson_free(json_str);
+    }
+    char *string_res;
+    string_res = malloc(MAXJSONSIZE * 100);
+    sprintf(string_res, "{\"posts\":%s}", json_object_to_json_string(jsarray));
+    send_data(connection, string_res);
+
+    free(string_res);
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+    json_object_put(jsarray);
+    json_object_put(jstring);
+    return MHD_YES;
+}
+
+enum MHD_Result Post(struct MHD_Connection *connection, const char *jsonstring, mongoc_client_t *client)
+{
+    mongoc_collection_t *collection = mongoc_client_get_collection(client, "user", "post");
+    mongoc_cursor_t *cursor;
+    const bson_t *doc;
+    bson_t *query;
+    json_object *jsarray = json_object_new_array();
+    json_object *jstring;
+    json_object *parsed_json_from_client = json_tokener_parse(jsonstring);
+    json_object *jsuserId;
+    json_object_object_get_ex(parsed_json_from_client, "userId", &jsuserId);
+
+    query = bson_new();
+    BSON_APPEND_UTF8(query, "userId", json_object_get_string(jsuserId));
+
+    cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+    while (mongoc_cursor_next(cursor, &doc))
+    {
+        char *json_str = bson_as_json(doc, NULL);
+        json_object_array_add(jsarray, jstring = json_object_new_string(json_str));
+        bson_free(json_str);
+    }
+    char *string_res;
+    string_res = malloc(MAXJSONSIZE * 100);
+    sprintf(string_res, "{\"posts\":%s}", json_object_to_json_string(jsarray));
+    send_data(connection, string_res);
+
+    free(string_res);
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
+    json_object_put(jsarray);
+    json_object_put(jsuserId);
+    json_object_put(parsed_json_from_client);
+    json_object_put(jstring);
+    return MHD_YES;
 }
