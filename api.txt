@@ -81,3 +81,22 @@ Response
         }
     2: {"posts":[ ]}
 **** Mỗi phần tử của posts là string chưa được parse ra json
+
+POST http://localhost:9002/everyone
+Request data={}
+Validate before request: userId no empty
+Response 
+    1: {
+        "mail": [
+            "trieuhoanglam0811@gmail.com",
+            "nghuyhoang2509@gmail.com",
+            "nhhoctap@gmail.com"
+        ],
+        "userId": [
+            "6415f381a5efcd1aa70716a1",
+            "6416b9476ca3fbacdd01ed61",
+            "64170644382317466c01ea91"
+        ]
+    }
+    2: {"mail":[ ], "userId":[]}
+

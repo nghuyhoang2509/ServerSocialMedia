@@ -22,9 +22,11 @@ enum MHD_Result iterate_post(void *coninfo_cls, enum MHD_ValueKind kind, const c
         con_info->jsonstring = jsonstring;
     }
     else
+    {
         con_info->jsonstring = NULL;
 
-    return MHD_NO;
+        return MHD_NO;
+    }
 
     return MHD_YES;
 }

@@ -15,7 +15,6 @@ enum MHD_Result Login(struct MHD_Connection *connection, const char *jsonstring,
     const char *mail = json_object_get_string(jsmail);
     json_object_object_get_ex(parsed_json_from_client, "password", &jspassword);
     const char *password = json_object_get_string(jspassword);
-    json_object_put(parsed_json_from_client);
 
     query = bson_new();
     BSON_APPEND_UTF8(query, "mail", mail);
@@ -31,29 +30,25 @@ enum MHD_Result Login(struct MHD_Connection *connection, const char *jsonstring,
             {
                 string_res = bson_as_json(doc, NULL);
                 send_data(connection, string_res);
-                mongoc_cursor_destroy(cursor);
-                bson_destroy(query);
-                json_object_put(jsmail);
-                json_object_put(jspassword);
-                mongoc_collection_destroy(collection);
-                return MHD_YES;
             }
             else
             {
 
                 string_res = "{\"error\":\"mail or password incorrect\"}";
                 send_data(connection, string_res);
-                mongoc_cursor_destroy(cursor);
-                bson_destroy(query);
-                json_object_put(jsmail);
-                json_object_put(jspassword);
-                mongoc_collection_destroy(collection);
-                return MHD_YES;
             }
         }
+        else
+        {
+            string_res = "{\"error\":\"mail or password incorrect\"}";
+            send_data(connection, string_res);
+        }
     }
-    string_res = "{\"error\":\"mail or password incorrect\"}";
-    send_data(connection, string_res);
+    else
+    {
+        string_res = "{\"error\":\"mail or password incorrect\"}";
+        send_data(connection, string_res);
+    }
     mongoc_cursor_destroy(cursor);
     bson_destroy(query);
     json_object_put(jsmail);
@@ -82,38 +77,30 @@ enum MHD_Result Register(struct MHD_Connection *connection, const char *jsonstri
     cursor = mongoc_collection_find_with_opts(collection, validate_info, NULL, NULL);
     if (mongoc_cursor_next(cursor, &doc))
     {
-        bson_destroy(info_register);
-        bson_destroy(validate_info);
-        mongoc_cursor_destroy(cursor);
-        json_object_put(jsmail);
-        json_object_put(jsfullname);
-        json_object_put(jspassword);
-        return send_data(connection, "{\"error\":\"Mail already exists\"}");
+        send_data(connection, "{\"error\":\"Mail already exists\"}");
     }
-    json_object_object_get_ex(parsed_json_from_client, "password", &jspassword);
-    json_object_object_get_ex(parsed_json_from_client, "fullname", &jsfullname);
-    BSON_APPEND_UTF8(info_register, "password", json_object_get_string(jspassword));
-    BSON_APPEND_UTF8(info_register, "fullname", json_object_get_string(jsfullname));
-    BSON_APPEND_UTF8(info_register, "mail", json_object_get_string(jsmail));
-    json_object_put(parsed_json_from_client);
-    if (!mongoc_collection_insert_one(collection, info_register, NULL, NULL, &error))
+    else
     {
-        bson_destroy(info_register);
-        bson_destroy(validate_info);
-        mongoc_cursor_destroy(cursor);
-        json_object_put(jsmail);
-        json_object_put(jsfullname);
-        json_object_put(jspassword);
-        return send_data(connection, "{\"error\":\"There is a problem, please try again\"}");
+        json_object_object_get_ex(parsed_json_from_client, "password", &jspassword);
+        json_object_object_get_ex(parsed_json_from_client, "fullname", &jsfullname);
+        BSON_APPEND_UTF8(info_register, "password", json_object_get_string(jspassword));
+        BSON_APPEND_UTF8(info_register, "fullname", json_object_get_string(jsfullname));
+        BSON_APPEND_UTF8(info_register, "mail", json_object_get_string(jsmail));
+        if (!mongoc_collection_insert_one(collection, info_register, NULL, NULL, &error))
+        {
+            send_data(connection, "{\"error\":\"There is a problem, please try again\"}");
+        }
+        else
+        {
+
+            send_data(connection, "{\"success\":\"Register successful\"}");
+        }
     }
     bson_destroy(info_register);
     bson_destroy(validate_info);
     mongoc_cursor_destroy(cursor);
-    json_object_put(jsmail);
-    json_object_put(jsfullname);
-    json_object_put(jspassword);
     mongoc_collection_destroy(collection);
-    return send_data(connection, "{\"success\":\"Register successful\"}");
+    return MHD_YES;
 }
 
 enum MHD_Result Edit_account(struct MHD_Connection *connection, const char *jsonstring, mongoc_client_t *client)
@@ -148,10 +135,6 @@ enum MHD_Result Edit_account(struct MHD_Connection *connection, const char *json
     bson_destroy(update);
     bson_destroy(query);
     mongoc_collection_destroy(collection);
-    json_object_put(parsed_json_from_client);
-    json_object_put(jspassword);
-    json_object_put(jsfullname);
-    json_object_put(js_id);
     return MHD_YES;
 }
 
@@ -177,10 +160,6 @@ enum MHD_Result Create_post(struct MHD_Connection *connection, const char *jsons
     {
         send_data(connection, "{\"success\":\"Create successful\"}");
     }
-    json_object_put(parsed_json_from_client);
-    json_object_put(jsuserId);
-    json_object_put(jstitle);
-    json_object_put(jscontent);
     bson_destroy(doc);
     mongoc_collection_destroy(post);
     return MHD_YES;
@@ -218,10 +197,6 @@ enum MHD_Result Edit_post(struct MHD_Connection *connection, const char *jsonstr
     bson_destroy(update);
     bson_destroy(query);
     mongoc_collection_destroy(collection);
-    json_object_put(parsed_json_from_client);
-    json_object_put(jstitle);
-    json_object_put(jscontent);
-    json_object_put(js_id);
     return MHD_YES;
 }
 
@@ -250,19 +225,17 @@ enum MHD_Result Delete_post(struct MHD_Connection *connection, const char *jsons
 
     bson_destroy(query);
     mongoc_collection_destroy(collection);
-    json_object_put(parsed_json_from_client);
-    json_object_put(js_id);
     return MHD_YES;
 }
 
-enum MHD_Result All_post(struct MHD_Connection *connection, const char *jsonstring, mongoc_client_t *client)
+enum MHD_Result Everyone(struct MHD_Connection *connection, const char *jsonstring, mongoc_client_t *client)
 {
-    mongoc_collection_t *collection = mongoc_client_get_collection(client, "user", "post");
+    mongoc_collection_t *collection = mongoc_client_get_collection(client, "user", "account");
     mongoc_cursor_t *cursor;
     const bson_t *doc;
     bson_t *query;
-    json_object *jsarray = json_object_new_array();
-    json_object *jstring;
+    json_object *jsarraymail = json_object_new_array();
+    json_object *jsarrayid = json_object_new_array();
 
     query = bson_new();
 
@@ -270,21 +243,35 @@ enum MHD_Result All_post(struct MHD_Connection *connection, const char *jsonstri
 
     while (mongoc_cursor_next(cursor, &doc))
     {
-        char *json_str = bson_as_json(doc, NULL);
-        json_object_array_add(jsarray, jstring = json_object_new_string(json_str));
-        bson_free(json_str);
+        bson_iter_t iter_mail;
+        bson_iter_t iter_id;
+        bson_oid_t oid;
+        if (bson_iter_init_find(&iter_id, doc, "_id") && BSON_ITER_HOLDS_OID(&iter_id))
+        {
+            bson_oid_copy(bson_iter_oid(&iter_id), &oid);
+            char *oid_str;
+            oid_str = malloc(24 * 2 + 1);
+            bson_oid_to_string(&oid, oid_str);
+            json_object_array_add(jsarrayid, json_object_new_string(oid_str));
+            free(oid_str);
+        }
+
+        if (bson_iter_init_find(&iter_mail, doc, "mail"))
+        {
+            json_object_array_add(jsarraymail, json_object_new_string(bson_iter_utf8(&iter_mail, NULL)));
+        }
     }
     char *string_res;
     string_res = malloc(MAXJSONSIZE * 100);
-    sprintf(string_res, "{\"posts\":%s}", json_object_to_json_string(jsarray));
+    sprintf(string_res, "{\"mail\":%s, \"userId\":%s}", json_object_to_json_string(jsarraymail), json_object_to_json_string(jsarrayid));
     send_data(connection, string_res);
 
     free(string_res);
     bson_destroy(query);
     mongoc_cursor_destroy(cursor);
     mongoc_collection_destroy(collection);
-    json_object_put(jsarray);
-    json_object_put(jstring);
+    json_object_put(jsarraymail);
+    json_object_put(jsarrayid);
     return MHD_YES;
 }
 
@@ -315,13 +302,38 @@ enum MHD_Result Post(struct MHD_Connection *connection, const char *jsonstring, 
     sprintf(string_res, "{\"posts\":%s}", json_object_to_json_string(jsarray));
     send_data(connection, string_res);
 
-    free(string_res);
     bson_destroy(query);
     mongoc_cursor_destroy(cursor);
     mongoc_collection_destroy(collection);
-    json_object_put(jsarray);
-    json_object_put(jsuserId);
-    json_object_put(parsed_json_from_client);
-    json_object_put(jstring);
+    return MHD_YES;
+}
+
+enum MHD_Result All_post(struct MHD_Connection *connection, const char *jsonstring, mongoc_client_t *client)
+{
+    mongoc_collection_t *collection = mongoc_client_get_collection(client, "user", "post");
+    mongoc_cursor_t *cursor;
+    const bson_t *doc;
+    bson_t *query;
+    json_object *jsarray = json_object_new_array();
+    json_object *jstring;
+
+    query = bson_new();
+
+    cursor = mongoc_collection_find_with_opts(collection, query, NULL, NULL);
+
+    while (mongoc_cursor_next(cursor, &doc))
+    {
+        char *json_str = bson_as_json(doc, NULL);
+        json_object_array_add(jsarray, jstring = json_object_new_string(json_str));
+        bson_free(json_str);
+    }
+    char *string_res;
+    string_res = malloc(MAXJSONSIZE * 100);
+    sprintf(string_res, "{\"posts\":%s}", json_object_to_json_string(jsarray));
+    send_data(connection, string_res);
+
+    bson_destroy(query);
+    mongoc_cursor_destroy(cursor);
+    mongoc_collection_destroy(collection);
     return MHD_YES;
 }

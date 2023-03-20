@@ -66,7 +66,6 @@ static enum MHD_Result controller(void *cls, struct MHD_Connection *connection, 
         }
         else if (NULL != con_info->jsonstring)
         {
-            db = mongoc_client_get_database(client, "user");
             if (strcmp(url, "/login") == 0)
             {
                 return Login(connection, con_info->jsonstring, client);
@@ -99,6 +98,10 @@ static enum MHD_Result controller(void *cls, struct MHD_Connection *connection, 
             {
                 return Post(connection, con_info->jsonstring, client);
             }
+            if (strcmp(url, "/everyone") == 0)
+            {
+                return Everyone(connection, con_info->jsonstring, client);
+            }
         }
     }
     send_data(connection, "{\"error\":\"URL wrong, please try again\"}");
@@ -109,6 +112,7 @@ int main()
     mongoc_init();
 
     client = mongoc_client_new(uri_string);
+    db = mongoc_client_get_database(client, "user");
     if (!client)
     {
         printf("Failed to parse URI.\n");
