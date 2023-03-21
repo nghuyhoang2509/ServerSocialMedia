@@ -14,6 +14,9 @@
 #include <json-c/json_object.h>
 #include <bson.h>
 #include <mongoc.h>
+#include <setjmp.h>
+
+jmp_buf buferror;
 
 #include "env.c"
 #include "processpost.c"
@@ -27,84 +30,87 @@ static enum MHD_Result controller(void *cls, struct MHD_Connection *connection, 
                                   const char *method, const char *version, const char *upload_data,
                                   size_t *upload_data_size, void **con_cls)
 {
-    if (NULL == *con_cls)
+    if (setjmp(buferror) == 0)
     {
-        struct connection_info_struct *con_info;
-
-        con_info = malloc(sizeof(struct connection_info_struct));
-        if (NULL == con_info)
-            return MHD_NO;
-        con_info->jsonstring = NULL;
-
-        con_info->postprocessor =
-            MHD_create_post_processor(connection, POSTBUFFERSIZE,
-                                      iterate_post, (void *)con_info);
-
-        if (NULL == con_info->postprocessor)
+        if (NULL == *con_cls)
         {
-            free(con_info);
-            return MHD_NO;
-        }
+            struct connection_info_struct *con_info;
 
-        con_info->connectiontype = POST;
+            con_info = malloc(sizeof(struct connection_info_struct));
+            if (NULL == con_info)
+                return MHD_NO;
+            con_info->jsonstring = NULL;
 
-        *con_cls = (void *)con_info;
+            con_info->postprocessor =
+                MHD_create_post_processor(connection, POSTBUFFERSIZE,
+                                          iterate_post, (void *)con_info);
 
-        return MHD_YES;
-    }
-    if (strcmp(method, "POST") == 0)
-    {
-        struct connection_info_struct *con_info = *con_cls;
+            if (NULL == con_info->postprocessor)
+            {
+                free(con_info);
+                return MHD_NO;
+            }
 
-        if (*upload_data_size != 0)
-        {
-            MHD_post_process(con_info->postprocessor, upload_data,
-                             *upload_data_size);
-            *upload_data_size = 0;
+            con_info->connectiontype = POST;
+
+            *con_cls = (void *)con_info;
 
             return MHD_YES;
         }
-        else if (NULL != con_info->jsonstring)
+        if (strcmp(method, "POST") == 0)
         {
-            if (strcmp(url, "/login") == 0)
+            struct connection_info_struct *con_info = *con_cls;
+
+            if (*upload_data_size != 0)
             {
-                return Login(connection, con_info->jsonstring, client);
+                MHD_post_process(con_info->postprocessor, upload_data,
+                                 *upload_data_size);
+                *upload_data_size = 0;
+
+                return MHD_YES;
             }
-            if (strcmp(url, "/register") == 0)
+            else if (NULL != con_info->jsonstring)
             {
-                return Register(connection, con_info->jsonstring, client);
-            }
-            if (strcmp(url, "/edit-account") == 0)
-            {
-                return Edit_account(connection, con_info->jsonstring, client);
-            }
-            if (strcmp(url, "/create-post") == 0)
-            {
-                return Create_post(connection, con_info->jsonstring, client);
-            }
-            if (strcmp(url, "/edit-post") == 0)
-            {
-                return Edit_post(connection, con_info->jsonstring, client);
-            }
-            if (strcmp(url, "/delete-post") == 0)
-            {
-                return Delete_post(connection, con_info->jsonstring, client);
-            }
-            if (strcmp(url, "/all-post") == 0)
-            {
-                return All_post(connection, con_info->jsonstring, client);
-            }
-            if (strcmp(url, "/post") == 0)
-            {
-                return Post(connection, con_info->jsonstring, client);
-            }
-            if (strcmp(url, "/everyone") == 0)
-            {
-                return Everyone(connection, con_info->jsonstring, client);
+                if (strcmp(url, "/login") == 0)
+                {
+                    return Login(connection, con_info->jsonstring, client);
+                }
+                if (strcmp(url, "/register") == 0)
+                {
+                    return Register(connection, con_info->jsonstring, client);
+                }
+                if (strcmp(url, "/edit-account") == 0)
+                {
+                    return Edit_account(connection, con_info->jsonstring, client);
+                }
+                if (strcmp(url, "/create-post") == 0)
+                {
+                    return Create_post(connection, con_info->jsonstring, client);
+                }
+                if (strcmp(url, "/edit-post") == 0)
+                {
+                    return Edit_post(connection, con_info->jsonstring, client);
+                }
+                if (strcmp(url, "/delete-post") == 0)
+                {
+                    return Delete_post(connection, con_info->jsonstring, client);
+                }
+                if (strcmp(url, "/all-post") == 0)
+                {
+                    return All_post(connection, con_info->jsonstring, client);
+                }
+                if (strcmp(url, "/post") == 0)
+                {
+                    return Post(connection, con_info->jsonstring, client);
+                }
+                if (strcmp(url, "/everyone") == 0)
+                {
+                    return Everyone(connection, con_info->jsonstring, client);
+                }
             }
         }
     }
-    send_data(connection, "{\"error\":\"URL wrong, please try again\"}");
+    return send_data(connection, "{\"error\":\"Error for client, please check and try again\"}");
 }
 
 int main()
