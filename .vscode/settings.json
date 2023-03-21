@@ -1,6 +1,0 @@
-{
-  "files.associations": {
-    "microhttpd.h": "c",
-    "winsock2.h": "c"
-  }
-}
