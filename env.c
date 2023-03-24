@@ -4,7 +4,7 @@
 #define POST 1
 
 const char *error = "Fail.";
-int PORT = 80;
+int PORT = 9002;
 char *IP = "127.0.0.1";
 const char *uri_string = "mongodb+srv://nhh2509:MaiOcwqbb2amcf7g@cluster0.7wsgsz6.mongodb.net/?retryWrites=true&w=majority";
 
