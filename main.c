@@ -127,7 +127,7 @@ int main()
 
     struct MHD_Daemon *daemon;
 
-    daemon = MHD_start_daemon(MHD_USE_AUTO | MHD_USE_INTERNAL_POLLING_THREAD,
+    daemon = MHD_start_daemon(MHD_USE_AUTO | MHD_USE_SELECT_INTERNALLY,
                               PORT, NULL, NULL,
                               &controller, NULL,
                               MHD_OPTION_NOTIFY_COMPLETED, request_completed,
