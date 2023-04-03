@@ -144,16 +144,13 @@ enum MHD_Result Create_post(struct MHD_Connection *connection, const char *jsons
     json_object *parsed_json_from_client = json_tokener_parse(jsonstring);
     json_object *jsuserId;
     json_object *jsmail;
-    json_object *jstitle;
     json_object *jscontent;
     bson_t *doc = bson_new();
     json_object_object_get_ex(parsed_json_from_client, "userId", &jsuserId);
     json_object_object_get_ex(parsed_json_from_client, "mail", &jsmail);
     json_object_object_get_ex(parsed_json_from_client, "content", &jscontent);
-    json_object_object_get_ex(parsed_json_from_client, "title", &jstitle);
     BSON_APPEND_UTF8(doc, "mail", json_object_get_string(jsmail));
     BSON_APPEND_UTF8(doc, "content", json_object_get_string(jscontent));
-    BSON_APPEND_UTF8(doc, "title", json_object_get_string(jstitle));
     BSON_APPEND_UTF8(doc, "userId", json_object_get_string(jsuserId));
     if (!mongoc_collection_insert_one(post, doc, NULL, NULL, NULL))
     {
@@ -174,19 +171,16 @@ enum MHD_Result Edit_post(struct MHD_Connection *connection, const char *jsonstr
     collection = mongoc_client_get_collection(client, "user", "post");
     json_object *parsed_json_from_client = json_tokener_parse(jsonstring);
     json_object *jscontent;
-    json_object *jstitle;
     json_object *js_id;
     bson_oid_t oid;
     bson_t *query = NULL;
     bson_t *update = NULL;
     bson_error_t error;
     json_object_object_get_ex(parsed_json_from_client, "content", &jscontent);
-    json_object_object_get_ex(parsed_json_from_client, "title", &jstitle);
     json_object_object_get_ex(parsed_json_from_client, "_id", &js_id);
     bson_oid_init_from_string(&oid, json_object_get_string(js_id));
     query = BCON_NEW("_id", BCON_OID(&oid));
     update = BCON_NEW("$set", "{",
-                      "title", BCON_UTF8(json_object_get_string(jstitle)),
                       "content", BCON_UTF8(json_object_get_string(jscontent)),
                       "}", NULL);
     if (!mongoc_collection_update_one(collection, query, update, NULL, NULL, &error))
