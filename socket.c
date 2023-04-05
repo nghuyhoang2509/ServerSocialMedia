@@ -1,41 +1,85 @@
 #include <libwebsockets.h>
+#include <json-c/json.h>
+#include <json-c/json_object.h>
+#include <bson.h>
+#include <mongoc.h>
 #include <stdio.h>
 #include "env.c"
 
-struct chat_node
-{
-    struct chat_node *next;
-    struct lws *user1;
-    struct lws *user2;
-};
+#define MAX_CLIENTS 40
 
-struct client_node
+typedef struct
 {
-    struct client_node *next;
-    char *id;
-    char *mail;
-    struct lws *user;
-};
+    char mail[100];
+    struct lws *client;
+} ChatClients;
 
-static struct chat_node *chats = NULL;
-static struct client_node *clients = NULL;
+ChatClients Clients[MAX_CLIENTS];
 
 static int callback_ws(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
 {
     switch (reason)
     {
     case LWS_CALLBACK_ESTABLISHED:
-        if (!clients->user)
-        {
-            clients->next->user = wsi;
-        }
         printf("Client connected \n");
         break;
     case LWS_CALLBACK_RECEIVE:
-        printf("Received data: %s\n", (char *)in);
+        json_object *data_parse_from_client = json_tokener_parse((char *)in);
+        json_object *status_obj;
+        json_object_object_get_ex(data_parse_from_client, "status", &status_obj);
+        int status = json_object_get_int(status_obj);
+        json_object *from_obj;
+        json_object_object_get_ex(data_parse_from_client, "from", &from_obj);
+        const char *from = json_object_get_string(from_obj);
+        // status 0 is connect, 1 is message
+        // save client
+        if (status == 0)
+        {
+            for (int i = 1; i < MAX_CLIENTS; i++)
+            {
+                if (Clients[i].client == NULL)
+                {
+                    Clients[i].client = wsi;
+                    strcpy(Clients[i].mail, from);
+                    break;
+                }
+            }
+            printf("connect\n");
+        }
+        else
+        {
+            json_object *to_obj;
+            json_object_object_get_ex(data_parse_from_client, "to", &to_obj);
+            const char *to = json_object_get_string(to_obj);
+            json_object *data_obj;
+            json_object_object_get_ex(data_parse_from_client, "data", &data_obj);
+            const char *data = json_object_get_string(data_obj);
+            for (int i = 1; i < MAX_CLIENTS; i++)
+            {
+                if (strcmp(to, Clients[i].mail) == 0)
+                {
+                    char response[500];
+                    sprintf(response, "{\"status\":\"message\",\"from\":\"%s\",\"data\":\"%s\"}", from, data);
+                    lws_write(Clients[i].client, (unsigned char *)response, strlen(response), LWS_WRITE_TEXT);
+                    // printf("%s\n", Clients[i].mail);
+                    break;
+                }
+            }
+            printf("message\n");
+        }
+        printf("Received data: %d\n", status);
         break;
-
     case LWS_CALLBACK_CLOSED:
+        // delete client in store
+        for (int i = 1; i < MAX_CLIENTS; i++)
+        {
+            if (Clients[i].client == wsi)
+            {
+                Clients[i].client = NULL;
+                strcpy(Clients[i].mail, "");
+                break;
+            }
+        }
         printf("Client disconnected\n");
         break;
 
