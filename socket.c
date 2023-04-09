@@ -4,9 +4,14 @@
 #include <bson.h>
 #include <mongoc.h>
 #include <stdio.h>
+#include <time.h>
 #include "env.c"
 
 #define MAX_CLIENTS 40
+
+mongoc_client_t *client;
+mongoc_database_t *db;
+mongoc_collection_t *collection;
 
 typedef struct
 {
@@ -35,7 +40,7 @@ static int callback_ws(struct lws *wsi, enum lws_callback_reasons reason, void *
         // save client
         if (status == 0)
         {
-            for (int i = 1; i < MAX_CLIENTS; i++)
+            for (int i = 0; i < MAX_CLIENTS; i++)
             {
                 if (Clients[i].client == NULL)
                 {
@@ -44,28 +49,45 @@ static int callback_ws(struct lws *wsi, enum lws_callback_reasons reason, void *
                     break;
                 }
             }
-            printf("connect\n");
+            printf("Have connect\n");
         }
         else
         {
             json_object *to_obj;
+            time_t timestamp = time(0);
             json_object_object_get_ex(data_parse_from_client, "to", &to_obj);
             const char *to = json_object_get_string(to_obj);
             json_object *data_obj;
             json_object_object_get_ex(data_parse_from_client, "data", &data_obj);
             const char *data = json_object_get_string(data_obj);
-            for (int i = 1; i < MAX_CLIENTS; i++)
+            for (int i = 0; i < MAX_CLIENTS; i++)
             {
+                // 1 is message 0 is not online 2 error
                 if (strcmp(to, Clients[i].mail) == 0)
                 {
                     char response[500];
-                    sprintf(response, "{\"status\":\"message\",\"from\":\"%s\",\"data\":\"%s\"}", from, data);
+                    sprintf(response, "{\"status\":\"1\",\"from\":\"%s\",\"data\":\"%s\",\"timestamp\":\"%ld\"}", from, data, timestamp);
                     lws_write(Clients[i].client, (unsigned char *)response, strlen(response), LWS_WRITE_TEXT);
                     // printf("%s\n", Clients[i].mail);
                     break;
                 }
+                else if (i == MAX_CLIENTS - 1)
+                {
+                    const char response[] = "{\"status\":\"0\"}";
+                    lws_write(wsi, (unsigned char *)response, strlen(response), LWS_WRITE_TEXT);
+                }
             }
-            printf("message\n");
+            /* bson_t *doc = bson_new();
+            BSON_APPEND_UTF8(doc, "message", data);
+            BSON_APPEND_UTF8(doc, "from", from);
+            BSON_APPEND_UTF8(doc, "to", to);
+            BSON_APPEND_INT32(doc, "timestamp", timestamp);
+            if (!mongoc_collection_insert_one(collection, doc, NULL, NULL, NULL))
+            {
+                printf("create document in MongoDB failure");
+            }
+            bson_destroy(doc);
+            printf("Have message\n"); */
         }
         printf("Received data: %d\n", status);
         break;
@@ -96,6 +118,15 @@ static struct lws_protocols protocols[] = {
 
 int main(int argc, char const *argv[])
 {
+    mongoc_init();
+
+    client = mongoc_client_new(uri_string);
+    db = mongoc_client_get_database(client, "user");
+    collection = mongoc_client_get_collection(client, "user", "message");
+    if (!client)
+    {
+        printf("MongoDB can not connect");
+    }
     struct lws_context_creation_info info;
     struct lws_context *context;
     const char *interface = NULL;
@@ -124,5 +155,8 @@ int main(int argc, char const *argv[])
 
     lws_context_destroy(context);
 
+    mongoc_database_destroy(db);
+    mongoc_client_destroy(client);
+    mongoc_collection_destroy(collection);
     return 0;
 }
