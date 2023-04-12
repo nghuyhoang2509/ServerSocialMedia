@@ -146,9 +146,12 @@ enum MHD_Result Create_post(struct MHD_Connection *connection, const char *jsons
     json_object *jsmail;
     json_object *jscontent;
     bson_t *doc = bson_new();
+    bson_oid_t oid;
+    bson_oid_init(&oid, NULL);
     json_object_object_get_ex(parsed_json_from_client, "userId", &jsuserId);
     json_object_object_get_ex(parsed_json_from_client, "mail", &jsmail);
     json_object_object_get_ex(parsed_json_from_client, "content", &jscontent);
+    BSON_APPEND_OID(doc, "_id", &oid);
     BSON_APPEND_UTF8(doc, "mail", json_object_get_string(jsmail));
     BSON_APPEND_UTF8(doc, "content", json_object_get_string(jscontent));
     BSON_APPEND_UTF8(doc, "userId", json_object_get_string(jsuserId));
@@ -158,29 +161,14 @@ enum MHD_Result Create_post(struct MHD_Connection *connection, const char *jsons
     }
     else
     {
-        const bson_t *doc_id;
-        bson_t *query_id = bson_new();
-        mongoc_cursor_t *cursor;
-        BSON_APPEND_UTF8(query_id, "mail", json_object_get_string(jsmail));
-        BSON_APPEND_UTF8(query_id, "content", json_object_get_string(jscontent));
-        BSON_APPEND_UTF8(query_id, "userId", json_object_get_string(jsuserId));
-        cursor = mongoc_collection_find_with_opts(post, query_id, NULL, NULL);
-        while (mongoc_cursor_next(cursor, &doc_id))
-        {
-            char *json_str = bson_as_json(doc_id, NULL);
-            json_object *respost = json_tokener_parse(json_str);
-            json_object *jspostId;
-            json_object_object_get_ex(respost, "_id", &jspostId);
-            json_object *oid_obj;
-            json_object_object_get_ex(jspostId, "$oid", &oid_obj);
-            char *string_res;
-            string_res = malloc(MAXJSONSIZE * 100);
-            sprintf(string_res, "{\"success\":\"Create successful\",\"postId\":%s}", json_object_to_json_string(oid_obj));
-            send_data(connection, string_res);
-            bson_free(json_str);
-        }
-        mongoc_cursor_destroy(cursor);
+        char str_oid[100];
+        bson_oid_to_string(&oid, str_oid);
+        char *string_res;
+        string_res = malloc(MAXJSONSIZE * 100);
+        sprintf(string_res, "{\"success\":\"Create successful\",\"postId\":\"%s\"}", str_oid);
+        send_data(connection, string_res);
     }
+
     bson_destroy(doc);
     mongoc_collection_destroy(post);
     return MHD_YES;
