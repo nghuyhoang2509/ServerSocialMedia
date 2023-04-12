@@ -158,7 +158,28 @@ enum MHD_Result Create_post(struct MHD_Connection *connection, const char *jsons
     }
     else
     {
-        send_data(connection, "{\"success\":\"Create successful\"}");
+        const bson_t *doc_id;
+        bson_t *query_id = bson_new();
+        mongoc_cursor_t *cursor;
+        BSON_APPEND_UTF8(query_id, "mail", json_object_get_string(jsmail));
+        BSON_APPEND_UTF8(query_id, "content", json_object_get_string(jscontent));
+        BSON_APPEND_UTF8(query_id, "userId", json_object_get_string(jsuserId));
+        cursor = mongoc_collection_find_with_opts(post, query_id, NULL, NULL);
+        while (mongoc_cursor_next(cursor, &doc_id))
+        {
+            char *json_str = bson_as_json(doc_id, NULL);
+            json_object *respost = json_tokener_parse(json_str);
+            json_object *jspostId;
+            json_object_object_get_ex(respost, "_id", &jspostId);
+            json_object *oid_obj;
+            json_object_object_get_ex(jspostId, "$oid", &oid_obj);
+            char *string_res;
+            string_res = malloc(MAXJSONSIZE * 100);
+            sprintf(string_res, "{\"success\":\"Create successful\",\"postId\":%s}", json_object_to_json_string(oid_obj));
+            send_data(connection, string_res);
+            bson_free(json_str);
+        }
+        mongoc_cursor_destroy(cursor);
     }
     bson_destroy(doc);
     mongoc_collection_destroy(post);
