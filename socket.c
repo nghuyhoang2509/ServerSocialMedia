@@ -1,162 +1,192 @@
-#include <libwebsockets.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <signal.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <json-c/json.h>
 #include <json-c/json_object.h>
-#include <bson.h>
-#include <mongoc.h>
-#include <stdio.h>
-#include <time.h>
-#include "env.c"
+#include <pthread.h>
 
-#define MAX_CLIENTS 40
+#define LENGTH_MAIL 100
+#define LENGTH_MSG 1024
+#define MAX_CLIENT 40
 
-mongoc_client_t *client;
-mongoc_database_t *db;
-mongoc_collection_t *collection;
-
-typedef struct
+struct Client
 {
-    char mail[100];
-    struct lws *client;
-} ChatClients;
+    int data;
+    char ip[16];
+    char mail[LENGTH_MAIL];
+};
 
-ChatClients Clients[MAX_CLIENTS];
+struct Client ClientList[MAX_CLIENT];
 
-static int callback_ws(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len)
+// Global variables
+int server_sockfd = 0, client_sockfd = 0;
+
+void catch_ctrl_c_and_exit(int sig)
 {
-    switch (reason)
+    for (int i = 0; i < MAX_CLIENT; i++)
     {
-    case LWS_CALLBACK_ESTABLISHED:
-        printf("Client connected \n");
-        break;
-    case LWS_CALLBACK_RECEIVE:
-        json_object *data_parse_from_client = json_tokener_parse((char *)in);
-        json_object *status_obj;
-        json_object_object_get_ex(data_parse_from_client, "status", &status_obj);
-        int status = json_object_get_int(status_obj);
-        json_object *from_obj;
-        json_object_object_get_ex(data_parse_from_client, "from", &from_obj);
-        const char *from = json_object_get_string(from_obj);
-        // status 0 is connect, 1 is message
-        // save client
-        if (status == 0)
-        {
-            for (int i = 0; i < MAX_CLIENTS; i++)
-            {
-                if (Clients[i].client == NULL)
-                {
-                    Clients[i].client = wsi;
-                    strcpy(Clients[i].mail, from);
-                    break;
-                }
-            }
-            printf("Have connect\n");
-        }
-        else
-        {
-            json_object *to_obj;
-            time_t timestamp = time(0);
-            json_object_object_get_ex(data_parse_from_client, "to", &to_obj);
-            const char *to = json_object_get_string(to_obj);
-            json_object *data_obj;
-            json_object_object_get_ex(data_parse_from_client, "data", &data_obj);
-            const char *data = json_object_get_string(data_obj);
-            for (int i = 0; i < MAX_CLIENTS; i++)
-            {
-                // 1 is message 0 is not online 2 error
-                if (strcmp(to, Clients[i].mail) == 0)
-                {
-                    char response[500];
-                    sprintf(response, "{\"status\":\"1\",\"from\":\"%s\",\"data\":\"%s\",\"timestamp\":\"%ld\"}", from, data, timestamp);
-                    lws_write(Clients[i].client, (unsigned char *)response, strlen(response), LWS_WRITE_TEXT);
-                    // printf("%s\n", Clients[i].mail);
-                    break;
-                }
-                else if (i == MAX_CLIENTS - 1)
-                {
-                    const char response[] = "{\"status\":\"0\"}";
-                    lws_write(wsi, (unsigned char *)response, strlen(response), LWS_WRITE_TEXT);
-                }
-            }
-            /* bson_t *doc = bson_new();
-            BSON_APPEND_UTF8(doc, "message", data);
-            BSON_APPEND_UTF8(doc, "from", from);
-            BSON_APPEND_UTF8(doc, "to", to);
-            BSON_APPEND_INT32(doc, "timestamp", timestamp);
-            if (!mongoc_collection_insert_one(collection, doc, NULL, NULL, NULL))
-            {
-                printf("create document in MongoDB failure");
-            }
-            bson_destroy(doc);
-            printf("Have message\n"); */
-        }
-        printf("Received data: %d\n", status);
-        break;
-    case LWS_CALLBACK_CLOSED:
-        // delete client in store
-        for (int i = 1; i < MAX_CLIENTS; i++)
-        {
-            if (Clients[i].client == wsi)
-            {
-                Clients[i].client = NULL;
-                strcpy(Clients[i].mail, "");
-                break;
-            }
-        }
-        printf("Client disconnected\n");
-        break;
-
-    default:
-        break;
+        strcpy(ClientList[i].ip, "NULL");
+        strcpy(ClientList[i].mail, "");
+        close(ClientList[i].data);
+        ClientList[i].data = -1;
     }
-
-    return 0;
+    printf("Bye\n");
+    exit(EXIT_SUCCESS);
 }
 
-static struct lws_protocols protocols[] = {
-    {"ws", callback_ws, 0, 0},
-    {NULL, NULL, 0, 0}};
-
-int main(int argc, char const *argv[])
+void *client_handler(void *i)
 {
-    mongoc_init();
+    int leave_flag = 0;
+    char mail[LENGTH_MAIL] = {};
+    char recv_buffer[LENGTH_MSG] = {};
+    char send_buffer[LENGTH_MSG] = {};
+    int index = *(int *)i;
 
-    client = mongoc_client_new(uri_string);
-    db = mongoc_client_get_database(client, "user");
-    collection = mongoc_client_get_collection(client, "user", "message");
-    if (!client)
+    // set mail
+    if (recv(ClientList[index].data, mail, LENGTH_MAIL, 0) <= 0 || strlen(mail) < 2 || strlen(mail) >= LENGTH_MAIL - 1)
     {
-        printf("MongoDB can not connect");
+        printf("%s didn't input mail.\n", ClientList[index].ip);
+        leave_flag = 1;
     }
-    struct lws_context_creation_info info;
-    struct lws_context *context;
-    const char *interface = NULL;
-    int opts = 0;
-
-    memset(&info, 0, sizeof info);
-    info.port = PORTSK;
-    info.iface = interface;
-    info.protocols = protocols;
-    info.options = opts;
-
-    context = lws_create_context(&info);
-
-    if (context == NULL)
+    else
     {
-        fprintf(stderr, "Error creating libwebsocket context\n");
-        return 1;
+        strncpy(ClientList[index].mail, mail, LENGTH_MAIL);
+        printf("%s %s %d join the server.\n", ClientList[index].mail, ClientList[index].ip, ClientList[index].data);
+        sprintf(send_buffer, "success connect index=%d", index);
+        send(ClientList[index].data, send_buffer, LENGTH_MSG, 0);
     }
-
-    printf("Server started on port %d...\n", PORTSK);
 
     while (1)
     {
-        lws_service(context, 1000);
+        if (leave_flag)
+        {
+            break;
+        }
+        int receive = recv(ClientList[index].data, recv_buffer, LENGTH_MSG, 0);
+        json_object *data_parse_from_client = json_tokener_parse(recv_buffer);
+        json_object *status_obj;
+        json_object_object_get_ex(data_parse_from_client, "status", &status_obj);
+        int status = json_object_get_int(status_obj);
+        if (status == 1 && receive > 0)
+        {
+            json_object *from_obj;
+            json_object *to_obj;
+            json_object *data_obj;
+            json_object_object_get_ex(data_parse_from_client, "from", &from_obj);
+            json_object_object_get_ex(data_parse_from_client, "to", &to_obj);
+            json_object_object_get_ex(data_parse_from_client, "data", &data_obj);
+            const char *to = json_object_get_string(to_obj);
+            const char *data = json_object_get_string(data_obj);
+            const char *from = json_object_get_string(from_obj);
+            // finding client
+            for (int i = 0; i < MAX_CLIENT; i++)
+            {
+                if (ClientList[i].data >= 0 && strstr(ClientList[i].mail, to) != NULL)
+                {
+                    sprintf(send_buffer, "{\"status\":\"1\",\"from\":\"%s\",\"to\":\"%s\",\"data\":\"%s\"}", from, to, data);
+                    if (send(ClientList[i].data, send_buffer, LENGTH_MSG, 0) < 0)
+                    {
+                        send(ClientList[index].data, "{\"status\":\"0\"}", LENGTH_MSG, 0);
+                    }
+                    break;
+                }
+                if (i == MAX_CLIENT - 1)
+                {
+                    send(ClientList[index].data, "{\"status\":\"2\"}", 15, 0);
+                }
+            }
+        }
+        else if (receive == 0 || (status == 0 && receive > 0))
+        {
+            printf("%s %s %d  leave the chatroom.\n", ClientList[index].mail, ClientList[index].ip, ClientList[index].data);
+            leave_flag = 1;
+        }
+        else
+        {
+            printf("Fatal Error: -1\n");
+            leave_flag = 1;
+        }
     }
 
-    lws_context_destroy(context);
+    // Remove
+    close(ClientList[index].data);
+    strcpy(ClientList[index].ip, "NULL");
+    strcpy(ClientList[index].mail, "");
+    ClientList[index].data = -1;
+}
 
-    mongoc_database_destroy(db);
-    mongoc_client_destroy(client);
-    mongoc_collection_destroy(collection);
+int main()
+{
+    signal(SIGINT, catch_ctrl_c_and_exit);
+
+    // initial list
+    for (int i = 0; i <= MAX_CLIENT; i++)
+    {
+        strcpy(ClientList[i].ip, "NULL");
+        ClientList[i].data = -1;
+    }
+
+    // Create socket
+    server_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_sockfd == -1)
+    {
+        printf("Fail to create a socket.");
+        exit(EXIT_FAILURE);
+    }
+
+    // Socket information
+    struct sockaddr_in server_info, client_info;
+    int s_addrlen = sizeof(server_info);
+    int c_addrlen = sizeof(client_info);
+    memset(&server_info, 0, s_addrlen);
+    memset(&client_info, 0, c_addrlen);
+    server_info.sin_family = PF_INET;
+    server_info.sin_addr.s_addr = INADDR_ANY;
+    server_info.sin_port = htons(9001);
+
+    // Bind and Listen
+    bind(server_sockfd, (struct sockaddr *)&server_info, s_addrlen);
+    listen(server_sockfd, 5);
+
+    // Print Server IP
+    getsockname(server_sockfd, (struct sockaddr *)&server_info, (socklen_t *)&s_addrlen);
+
+    printf("Start Server on: %s:%d\n", inet_ntoa(server_info.sin_addr), ntohs(server_info.sin_port));
+    while (1)
+    {
+        client_sockfd = accept(server_sockfd, (struct sockaddr *)&client_info, (socklen_t *)&c_addrlen);
+
+        // Print Client IP
+        getpeername(client_sockfd, (struct sockaddr *)&client_info, (socklen_t *)&c_addrlen);
+        for (int i = 0; i < MAX_CLIENT; i++)
+        {
+            if (strcmp(ClientList[i].ip, "NULL") == 0)
+            {
+                char ip[16];
+                sprintf(ip, "%s:%d", inet_ntoa(client_info.sin_addr), ntohs(client_info.sin_port));
+                strcpy(ClientList[i].ip, ip);
+                ClientList[i].data = client_sockfd;
+                pthread_t id;
+                int *index = malloc(sizeof(int));
+                *index = i;
+                if (pthread_create(&id, NULL, client_handler, index) != 0)
+                {
+                    send(client_sockfd, "Please try again", LENGTH_MSG, 0);
+                }
+                break;
+            }
+            if (i == MAX_CLIENT - 1)
+            {
+                send(client_sockfd, "Server not available, waitting and try again", LENGTH_MSG, 0);
+            }
+        }
+    }
+
     return 0;
 }

@@ -100,3 +100,23 @@ Response
     }
     2: {"mail":[ ], "userId":[]}
 
+
+SOCKET
+
+send to server
+status 1 is send message
+status 0 is exit
+send to client
+status 1 is send message success
+status 2 is user not online
+status 0 is send message fail
+
+STEP to connect server
+1. send mail Firstly
+2. send json 
+{"status":"1","from":"nghuyhoang2509@gmail.com","to":"nghuyhoang2509@gmail.com","data":"hello"}
+{"status":"2","from":"nhhhoctap@gmail.com","to":"nghuythien2908@gmail.com","data":"hello"} not online
+3. disconnected 
+{
+"status":"0", 
+}
