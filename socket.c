@@ -133,7 +133,7 @@ int main()
     }
 
     // Create socket
-    server_sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    server_sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (server_sockfd == -1)
     {
         printf("Fail to create a socket.");
